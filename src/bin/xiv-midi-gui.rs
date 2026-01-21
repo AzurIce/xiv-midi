@@ -1,16 +1,18 @@
+use crossbeam_channel::{Receiver, Sender, unbounded};
 use eframe::egui;
+use egui_taffy::{TuiBuilderLogic, taffy, tui};
+use midir::MidiInputConnection;
 use std::path::PathBuf;
+use taffy::prelude::length;
 use xiv_midi::{
     engine::MidiEngine,
     keyboard::EnigoKeyboardController,
-    mapping::{create_ffxiv_default_mapping, MappingConfig},
+    mapping::{MappingConfig, create_ffxiv_default_mapping},
+    midi::MidiEventType,
 };
-use crossbeam_channel::{unbounded, Receiver, Sender};
-use midir::MidiInputConnection;
 
 #[derive(Debug, Clone)]
 enum AppEvent {
-    Log(String),
     DeviceConnected(String),
     DeviceDisconnected,
     MidiEvent { note: u8, velocity: u8, is_on: bool },
@@ -22,6 +24,7 @@ struct XivMidiApp {
     selected_device: Option<String>,
     connection: Option<MidiInputConnection<()>>,
     mapping_path: Option<PathBuf>,
+    mapping: MappingConfig,
 
     // Communication
     event_tx: Sender<AppEvent>,
@@ -29,7 +32,7 @@ struct XivMidiApp {
 
     // UI State
     log_messages: Vec<String>,
-    active_notes: std::collections::HashSet<u8>,
+    active_notes: std::collections::HashMap<u8, u8>, // note -> velocity
 
     // Status
     status: String,
@@ -38,18 +41,25 @@ struct XivMidiApp {
 impl XivMidiApp {
     fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         let (event_tx, event_rx) = unbounded();
+        _cc.egui_ctx.all_styles_mut(|style| {
+            style.wrap_mode = Some(egui::TextWrapMode::Extend);
+        });
 
-        Self {
+        let mut app = Self {
             devices: Vec::new(),
             selected_device: None,
             connection: None,
             mapping_path: None,
+            mapping: create_ffxiv_default_mapping(),
             event_tx,
             event_rx,
             log_messages: Vec::new(),
-            active_notes: std::collections::HashSet::new(),
+            active_notes: std::collections::HashMap::new(),
             status: "Ready".to_string(),
-        }
+        };
+
+        app.refresh_devices();
+        app
     }
 
     fn log(&mut self, message: String) {
@@ -76,7 +86,7 @@ impl XivMidiApp {
         self.log(format!("Connecting to '{}'...", device_name));
 
         // Load mapping
-        let mapping = if let Some(ref path) = self.mapping_path {
+        self.mapping = if let Some(ref path) = self.mapping_path {
             match MappingConfig::from_file(path) {
                 Ok(m) => {
                     self.log(format!("Loaded mapping from {}", path.display()));
@@ -102,15 +112,24 @@ impl XivMidiApp {
         };
 
         // Create engine
-        let engine = MidiEngine::new(keyboard, mapping);
+        let engine = MidiEngine::new(keyboard, self.mapping.clone());
 
         // Connect
-        match engine.connect(&device_name) {
+        let event_tx = self.event_tx.clone();
+        match engine.connect_with_callback(&device_name, move |msg| {
+            let _ = event_tx.send(AppEvent::MidiEvent {
+                note: msg.note.value(),
+                velocity: msg.velocity,
+                is_on: msg.event_type == MidiEventType::NoteOn,
+            });
+        }) {
             Ok(conn) => {
                 self.connection = Some(conn);
                 self.status = format!("Connected to '{}'", device_name);
                 self.log(format!("Successfully connected to '{}'", device_name));
-                let _ = self.event_tx.send(AppEvent::DeviceConnected(device_name.clone()));
+                let _ = self
+                    .event_tx
+                    .send(AppEvent::DeviceConnected(device_name.clone()));
             }
             Err(e) => {
                 self.log(format!("Error connecting: {}", e));
@@ -131,14 +150,19 @@ impl XivMidiApp {
     fn process_events(&mut self) {
         while let Ok(event) = self.event_rx.try_recv() {
             match event {
-                AppEvent::Log(msg) => {
-                    self.log(msg);
+                AppEvent::DeviceConnected(name) => {
+                    tracing::debug!("Device connected event: {}", name);
                 }
-                AppEvent::DeviceConnected(_) => {}
-                AppEvent::DeviceDisconnected => {}
-                AppEvent::MidiEvent { note, velocity: _, is_on } => {
+                AppEvent::DeviceDisconnected => {
+                    tracing::debug!("Device disconnected event");
+                }
+                AppEvent::MidiEvent {
+                    note,
+                    velocity,
+                    is_on,
+                } => {
                     if is_on {
-                        self.active_notes.insert(note);
+                        self.active_notes.insert(note, velocity);
                     } else {
                         self.active_notes.remove(&note);
                     }
@@ -221,6 +245,12 @@ impl eframe::App for XivMidiApp {
 
             ui.separator();
 
+            // Mapping Info
+            ui.heading("Mapping & Live Actions");
+            self.draw_mapping_info(ui);
+
+            ui.separator();
+
             // Log panel
             ui.heading("Log");
             egui::ScrollArea::vertical()
@@ -233,94 +263,147 @@ impl eframe::App for XivMidiApp {
                 });
         });
 
-        // Request repaint if we have active notes
-        if !self.active_notes.is_empty() {
-            ctx.request_repaint();
-        }
+        ctx.request_repaint();
     }
 }
 
 impl XivMidiApp {
+    fn draw_mapping_info(&self, ui: &mut egui::Ui) {
+        egui::ScrollArea::vertical()
+            .id_salt("mapping_info")
+            .max_height(150.0)
+            .auto_shrink([false; 2])
+            .show(ui, |ui| {
+                tui(ui, "mapping_tui")
+                    .reserve_available_width()
+                    .style(taffy::Style {
+                        flex_direction: taffy::FlexDirection::Row,
+                        flex_wrap: taffy::FlexWrap::Wrap,
+                        gap: length(8.0),
+                        padding: length(8.0),
+                        ..Default::default()
+                    })
+                    .show(|tui| {
+                        let mut sorted_notes: Vec<_> = self.active_notes.keys().collect();
+                        sorted_notes.sort();
+
+                        if sorted_notes.is_empty() {
+                            tui.label(
+                                egui::RichText::new("No active notes")
+                                    .italics()
+                                    .color(egui::Color32::GRAY),
+                            );
+                        } else {
+                            for note_val in sorted_notes {
+                                if let Some(mapping) = self.mapping.mappings.get(note_val) {
+                                    let note_name = xiv_midi::midi::MidiNote::new(*note_val)
+                                        .map(|n| n.full_name())
+                                        .unwrap_or_else(|_| note_val.to_string());
+
+                                    tui.add_with_border(|tui| {
+                                        tui.ui(|ui| {
+                                            ui.horizontal(|ui| {
+                                                ui.label(
+                                                    egui::RichText::new(format!("{}:", note_name))
+                                                        .strong(),
+                                                );
+                                                for action in &mapping.on_press {
+                                                    ui.label(format!("{:?}", action));
+                                                }
+                                            });
+                                        });
+                                    });
+                                }
+                            }
+                        }
+                    });
+            });
+    }
+
     fn draw_piano(&self, ui: &mut egui::Ui) {
         let (rect, _) = ui.allocate_exact_size(
-            egui::vec2(ui.available_width(), 80.0),
+            egui::vec2(ui.available_width(), 100.0),
             egui::Sense::hover(),
         );
 
         let painter = ui.painter_at(rect);
 
-        // Draw range: C2 (MIDI 36) to C6 (MIDI 84)
+        // Draw range: C2 (MIDI 36) to C7 (MIDI 96) - 5 octaves
         let start_note = 36;
-        let end_note = 84;
-        let white_key_width = rect.width() / 28.0; // Approximate white keys in range
-        let white_key_height = rect.height();
-        let black_key_width = white_key_width * 0.6;
-        let black_key_height = white_key_height * 0.6;
+        let end_note = 96;
 
-        let mut x = rect.min.x;
-
-        // Draw white keys first
+        let mut white_notes = Vec::new();
         for note in start_note..=end_note {
             let note_in_octave = note % 12;
-            let is_black = matches!(note_in_octave, 1 | 3 | 6 | 8 | 10);
+            if !matches!(note_in_octave, 1 | 3 | 6 | 8 | 10) {
+                white_notes.push(note);
+            }
+        }
 
-            if !is_black {
-                let is_active = self.active_notes.contains(&note);
-                let color = if is_active {
-                    egui::Color32::from_rgb(100, 200, 100)
+        let num_white_keys = white_notes.len();
+        let white_key_width = rect.width() / num_white_keys as f32;
+        let white_key_height = rect.height();
+        let black_key_width = white_key_width * 0.7;
+        let black_key_height = white_key_height * 0.6;
+
+        // 1. Draw white keys
+        for (i, &note) in white_notes.iter().enumerate() {
+            let x = rect.min.x + i as f32 * white_key_width;
+            let color = if let Some(&velocity) = self.active_notes.get(&note) {
+                let intensity = (velocity as f32 / 127.0).clamp(0.4, 1.0);
+                // Brighter, more saturated green for active keys
+                egui::Color32::from_rgb(
+                    (180.0 * (1.0 - intensity)) as u8,
+                    255,
+                    (180.0 * (1.0 - intensity)) as u8,
+                )
+            } else {
+                egui::Color32::WHITE
+            };
+
+            let key_rect = egui::Rect::from_min_size(
+                egui::pos2(x, rect.min.y),
+                egui::vec2(white_key_width, white_key_height),
+            );
+
+            painter.rect_filled(key_rect, 2.0, color);
+            painter.rect(
+                key_rect,
+                2.0,
+                egui::Color32::TRANSPARENT,
+                egui::Stroke::new(1.0, egui::Color32::from_gray(180)),
+                egui::epaint::StrokeKind::Outside,
+            );
+        }
+
+        // 2. Draw black keys
+        for (i, &note) in white_notes.iter().enumerate() {
+            let note_in_octave = note % 12;
+            // If this white note has a black key to its right (except E and B)
+            if !matches!(note_in_octave, 4 | 11) && i < num_white_keys - 1 {
+                let black_note = note + 1;
+                let x = rect.min.x + (i as f32 + 1.0) * white_key_width - black_key_width / 2.0;
+
+                let color = if let Some(&velocity) = self.active_notes.get(&black_note) {
+                    let _intensity = (velocity as f32 / 127.0).clamp(0.4, 1.0);
+                    egui::Color32::from_rgb(0, 255, 0) // Pure bright green for black keys
                 } else {
-                    egui::Color32::WHITE
+                    egui::Color32::from_gray(40)
                 };
 
                 let key_rect = egui::Rect::from_min_size(
                     egui::pos2(x, rect.min.y),
-                    egui::vec2(white_key_width, white_key_height),
+                    egui::vec2(black_key_width, black_key_height),
                 );
 
-                painter.rect_filled(key_rect, 2.0, color);
+                painter.rect_filled(key_rect, 1.0, color);
                 painter.rect(
                     key_rect,
-                    2.0,
+                    1.0,
                     egui::Color32::TRANSPARENT,
                     egui::Stroke::new(1.0, egui::Color32::BLACK),
                     egui::epaint::StrokeKind::Outside,
                 );
-
-                x += white_key_width;
-            }
-        }
-
-        // Draw black keys on top
-        x = rect.min.x;
-        for note in start_note..=end_note {
-            let note_in_octave = note % 12;
-            let is_black = matches!(note_in_octave, 1 | 3 | 6 | 8 | 10);
-
-            if is_black {
-                let is_active = self.active_notes.contains(&note);
-                let color = if is_active {
-                    egui::Color32::from_rgb(0, 150, 0)
-                } else {
-                    egui::Color32::BLACK
-                };
-
-                // Position black key between white keys
-                let prev_white_x = x - white_key_width * 0.5;
-                let key_rect = egui::Rect::from_min_size(
-                    egui::pos2(prev_white_x + white_key_width * 0.7, rect.min.y),
-                    egui::vec2(black_key_width, black_key_height),
-                );
-
-                painter.rect_filled(key_rect, 2.0, color);
-                painter.rect(
-                    key_rect,
-                    2.0,
-                    egui::Color32::TRANSPARENT,
-                    egui::Stroke::new(1.0, egui::Color32::DARK_GRAY),
-                    egui::epaint::StrokeKind::Outside,
-                );
-            } else {
-                x += white_key_width;
             }
         }
     }

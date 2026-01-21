@@ -46,6 +46,18 @@ impl<K: KeyboardController + 'static> MidiEngine<K> {
 
     /// Connect to a MIDI device by name
     pub fn connect(&self, device_name: &str) -> Result<MidiInputConnection<()>> {
+        self.connect_with_callback(device_name, |_| {})
+    }
+
+    /// Connect to a MIDI device by name with a callback for MIDI events
+    pub fn connect_with_callback<F>(
+        &self,
+        device_name: &str,
+        callback: F,
+    ) -> Result<MidiInputConnection<()>>
+    where
+        F: Fn(MidiMessage) + Send + 'static,
+    {
         let mut midi_in = MidiInput::new("xiv-midi")?;
         midi_in.ignore(Ignore::None);
 
@@ -59,16 +71,26 @@ impl<K: KeyboardController + 'static> MidiEngine<K> {
                     .map(|name| name == device_name)
                     .unwrap_or(false)
             })
-            .ok_or_else(|| {
-                Error::Mapping(format!("Device '{}' not found", device_name))
-            })?;
+            .ok_or_else(|| Error::Mapping(format!("Device '{}' not found", device_name)))?;
 
-        self.connect_port(port)
+        self.connect_port_with_callback(port, callback)
     }
 
     /// Connect to a MIDI device by port
     pub fn connect_port(&self, port: MidiInputPort) -> Result<MidiInputConnection<()>> {
-        let mut midi_in = MidiInput::new("xiv-midi")?;
+        self.connect_port_with_callback(port, |_| {})
+    }
+
+    /// Connect to a MIDI device by port with a callback for MIDI events
+    pub fn connect_port_with_callback<F>(
+        &self,
+        port: MidiInputPort,
+        callback: F,
+    ) -> Result<MidiInputConnection<()>>
+    where
+        F: Fn(MidiMessage) + Send + 'static,
+    {
+        let midi_in = MidiInput::new("xiv-midi")?;
 
         let keyboard = Arc::clone(&self.keyboard);
         let mapping = Arc::clone(&self.mapping);
@@ -77,14 +99,16 @@ impl<K: KeyboardController + 'static> MidiEngine<K> {
         let connection = midi_in.connect(
             &port,
             "xiv-midi-input",
-            move |_timestamp, data, _| {
-                if let Err(e) = Self::handle_midi_event(
-                    data,
-                    &keyboard,
-                    &mapping,
-                    &modifiers,
-                ) {
-                    tracing::error!("Error handling MIDI event: {}", e);
+            move |_timestamp, data, _| match MidiMessage::parse(data) {
+                Ok(msg) => {
+                    callback(msg.clone());
+
+                    if let Err(e) = Self::handle_midi_event(msg, &keyboard, &mapping, &modifiers) {
+                        tracing::error!("Error handling MIDI event: {}", e);
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Error parsing MIDI message: {}", e);
                 }
             },
             (),
@@ -96,14 +120,11 @@ impl<K: KeyboardController + 'static> MidiEngine<K> {
 
     /// Handle a MIDI event
     fn handle_midi_event(
-        data: &[u8],
+        msg: MidiMessage,
         keyboard: &Arc<Mutex<K>>,
         mapping: &Arc<Mutex<MappingConfig>>,
         modifiers: &Arc<Mutex<ModifierState>>,
     ) -> Result<()> {
-        // Parse MIDI message
-        let msg = MidiMessage::parse(data)?;
-
         tracing::debug!(
             "MIDI event: {:?} {} (vel: {})",
             msg.event_type,
