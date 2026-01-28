@@ -1,0 +1,799 @@
+{
+  "channel": 0,
+  "mappings": {
+    "55": {
+      "on_press": [
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": true,
+            "alt": false
+          }
+        },
+        {
+          "Press": "T"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "T"
+        },
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": false,
+            "alt": false
+          }
+        }
+      ]
+    },
+    "50": {
+      "on_press": [
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": true,
+            "alt": false
+          }
+        },
+        {
+          "Press": "W"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "W"
+        },
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": false,
+            "alt": false
+          }
+        }
+      ]
+    },
+    "69": {
+      "on_press": [
+        {
+          "Press": "Y"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "Y"
+        }
+      ]
+    },
+    "70": {
+      "on_press": [
+        {
+          "Press": "Num7"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "Num7"
+        }
+      ]
+    },
+    "74": {
+      "on_press": [
+        {
+          "SetModifiers": {
+            "shift": true,
+            "ctrl": false,
+            "alt": false
+          }
+        },
+        {
+          "Press": "W"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "W"
+        },
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": false,
+            "alt": false
+          }
+        }
+      ]
+    },
+    "61": {
+      "on_press": [
+        {
+          "Press": "Num2"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "Num2"
+        }
+      ]
+    },
+    "82": {
+      "on_press": [
+        {
+          "SetModifiers": {
+            "shift": true,
+            "ctrl": false,
+            "alt": false
+          }
+        },
+        {
+          "Press": "Num7"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "Num7"
+        },
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": false,
+            "alt": false
+          }
+        }
+      ]
+    },
+    "57": {
+      "on_press": [
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": true,
+            "alt": false
+          }
+        },
+        {
+          "Press": "Y"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "Y"
+        },
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": false,
+            "alt": false
+          }
+        }
+      ]
+    },
+    "63": {
+      "on_press": [
+        {
+          "Press": "Num3"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "Num3"
+        }
+      ]
+    },
+    "66": {
+      "on_press": [
+        {
+          "Press": "Num5"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "Num5"
+        }
+      ]
+    },
+    "83": {
+      "on_press": [
+        {
+          "SetModifiers": {
+            "shift": true,
+            "ctrl": false,
+            "alt": false
+          }
+        },
+        {
+          "Press": "U"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "U"
+        },
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": false,
+            "alt": false
+          }
+        }
+      ]
+    },
+    "71": {
+      "on_press": [
+        {
+          "Press": "U"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "U"
+        }
+      ]
+    },
+    "77": {
+      "on_press": [
+        {
+          "SetModifiers": {
+            "shift": true,
+            "ctrl": false,
+            "alt": false
+          }
+        },
+        {
+          "Press": "R"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "R"
+        },
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": false,
+            "alt": false
+          }
+        }
+      ]
+    },
+    "75": {
+      "on_press": [
+        {
+          "SetModifiers": {
+            "shift": true,
+            "ctrl": false,
+            "alt": false
+          }
+        },
+        {
+          "Press": "Num3"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "Num3"
+        },
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": false,
+            "alt": false
+          }
+        }
+      ]
+    },
+    "79": {
+      "on_press": [
+        {
+          "SetModifiers": {
+            "shift": true,
+            "ctrl": false,
+            "alt": false
+          }
+        },
+        {
+          "Press": "T"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "T"
+        },
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": false,
+            "alt": false
+          }
+        }
+      ]
+    },
+    "49": {
+      "on_press": [
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": true,
+            "alt": false
+          }
+        },
+        {
+          "Press": "Num2"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "Num2"
+        },
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": false,
+            "alt": false
+          }
+        }
+      ]
+    },
+    "65": {
+      "on_press": [
+        {
+          "Press": "R"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "R"
+        }
+      ]
+    },
+    "58": {
+      "on_press": [
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": true,
+            "alt": false
+          }
+        },
+        {
+          "Press": "Num7"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "Num7"
+        },
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": false,
+            "alt": false
+          }
+        }
+      ]
+    },
+    "68": {
+      "on_press": [
+        {
+          "Press": "Num6"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "Num6"
+        }
+      ]
+    },
+    "48": {
+      "on_press": [
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": true,
+            "alt": false
+          }
+        },
+        {
+          "Press": "Q"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "Q"
+        },
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": false,
+            "alt": false
+          }
+        }
+      ]
+    },
+    "76": {
+      "on_press": [
+        {
+          "SetModifiers": {
+            "shift": true,
+            "ctrl": false,
+            "alt": false
+          }
+        },
+        {
+          "Press": "E"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "E"
+        },
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": false,
+            "alt": false
+          }
+        }
+      ]
+    },
+    "56": {
+      "on_press": [
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": true,
+            "alt": false
+          }
+        },
+        {
+          "Press": "Num6"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "Num6"
+        },
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": false,
+            "alt": false
+          }
+        }
+      ]
+    },
+    "78": {
+      "on_press": [
+        {
+          "SetModifiers": {
+            "shift": true,
+            "ctrl": false,
+            "alt": false
+          }
+        },
+        {
+          "Press": "Num5"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "Num5"
+        },
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": false,
+            "alt": false
+          }
+        }
+      ]
+    },
+    "54": {
+      "on_press": [
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": true,
+            "alt": false
+          }
+        },
+        {
+          "Press": "Num5"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "Num5"
+        },
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": false,
+            "alt": false
+          }
+        }
+      ]
+    },
+    "59": {
+      "on_press": [
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": true,
+            "alt": false
+          }
+        },
+        {
+          "Press": "U"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "U"
+        },
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": false,
+            "alt": false
+          }
+        }
+      ]
+    },
+    "62": {
+      "on_press": [
+        {
+          "Press": "W"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "W"
+        }
+      ]
+    },
+    "80": {
+      "on_press": [
+        {
+          "SetModifiers": {
+            "shift": true,
+            "ctrl": false,
+            "alt": false
+          }
+        },
+        {
+          "Press": "Num6"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "Num6"
+        },
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": false,
+            "alt": false
+          }
+        }
+      ]
+    },
+    "60": {
+      "on_press": [
+        {
+          "Press": "Q"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "Q"
+        }
+      ]
+    },
+    "67": {
+      "on_press": [
+        {
+          "Press": "T"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "T"
+        }
+      ]
+    },
+    "52": {
+      "on_press": [
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": true,
+            "alt": false
+          }
+        },
+        {
+          "Press": "E"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "E"
+        },
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": false,
+            "alt": false
+          }
+        }
+      ]
+    },
+    "53": {
+      "on_press": [
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": true,
+            "alt": false
+          }
+        },
+        {
+          "Press": "R"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "R"
+        },
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": false,
+            "alt": false
+          }
+        }
+      ]
+    },
+    "73": {
+      "on_press": [
+        {
+          "SetModifiers": {
+            "shift": true,
+            "ctrl": false,
+            "alt": false
+          }
+        },
+        {
+          "Press": "Num2"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "Num2"
+        },
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": false,
+            "alt": false
+          }
+        }
+      ]
+    },
+    "84": {
+      "on_press": [
+        {
+          "SetModifiers": {
+            "shift": true,
+            "ctrl": false,
+            "alt": false
+          }
+        },
+        {
+          "Press": "I"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "I"
+        },
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": false,
+            "alt": false
+          }
+        }
+      ]
+    },
+    "64": {
+      "on_press": [
+        {
+          "Press": "E"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "E"
+        }
+      ]
+    },
+    "51": {
+      "on_press": [
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": true,
+            "alt": false
+          }
+        },
+        {
+          "Press": "Num3"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "Num3"
+        },
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": false,
+            "alt": false
+          }
+        }
+      ]
+    },
+    "72": {
+      "on_press": [
+        {
+          "SetModifiers": {
+            "shift": true,
+            "ctrl": false,
+            "alt": false
+          }
+        },
+        {
+          "Press": "Q"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "Q"
+        },
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": false,
+            "alt": false
+          }
+        }
+      ]
+    },
+    "81": {
+      "on_press": [
+        {
+          "SetModifiers": {
+            "shift": true,
+            "ctrl": false,
+            "alt": false
+          }
+        },
+        {
+          "Press": "Y"
+        }
+      ],
+      "on_release": [
+        {
+          "Release": "Y"
+        },
+        {
+          "SetModifiers": {
+            "shift": false,
+            "ctrl": false,
+            "alt": false
+          }
+        }
+      ]
+    }
+  }
+}
