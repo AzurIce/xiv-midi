@@ -41,6 +41,9 @@ pub struct MappingConfig {
     pub channel: Option<u8>,
     /// Note mappings
     pub mappings: HashMap<u8, NoteMapping>,
+    /// Whether to transpose out-of-range notes by octaves to fit within the mapped range
+    #[serde(default)]
+    pub octave_transpose: bool,
 }
 
 impl MappingConfig {
@@ -48,12 +51,78 @@ impl MappingConfig {
         Self {
             channel: Some(0),
             mappings: HashMap::new(),
+            octave_transpose: false,
         }
     }
 
     /// Get mapping for a specific note
     pub fn get_mapping(&self, note: MidiNote) -> Option<&NoteMapping> {
         self.mappings.get(&note.value())
+    }
+
+    /// Get mapping for a note, with octave transposition if enabled.
+    /// If the note has no direct mapping and `octave_transpose` is true,
+    /// shifts the note up/down by octaves until a mapping is found.
+    pub fn get_mapping_transposed(&self, note: MidiNote) -> Option<(MidiNote, &NoteMapping)> {
+        // Direct lookup first
+        if let Some(m) = self.mappings.get(&note.value()) {
+            return Some((note, m));
+        }
+
+        if !self.octave_transpose {
+            return None;
+        }
+
+        // Find the range of mapped notes
+        let min_mapped = *self.mappings.keys().min()?;
+        let max_mapped = *self.mappings.keys().max()?;
+
+        let mut candidate = note.value();
+
+        // Try shifting toward the mapped range
+        if candidate < min_mapped {
+            // Shift up by octaves
+            while candidate + 12 <= 127 {
+                candidate += 12;
+                if let Some(m) = self.mappings.get(&candidate) {
+                    return MidiNote::new(candidate).ok().map(|n| (n, m));
+                }
+            }
+        } else if candidate > max_mapped {
+            // Shift down by octaves
+            while candidate >= 12 {
+                candidate -= 12;
+                if let Some(m) = self.mappings.get(&candidate) {
+                    return MidiNote::new(candidate).ok().map(|n| (n, m));
+                }
+            }
+        } else {
+            // Note is within the overall range but has no mapping at this octave.
+            // Try the nearest octave shifts (down first, then up).
+            let mut down = note.value();
+            let mut up = note.value();
+            loop {
+                let can_down = down >= 12;
+                let can_up = up + 12 <= 127;
+                if !can_down && !can_up {
+                    break;
+                }
+                if can_down {
+                    down -= 12;
+                    if let Some(m) = self.mappings.get(&down) {
+                        return MidiNote::new(down).ok().map(|n| (n, m));
+                    }
+                }
+                if can_up {
+                    up += 12;
+                    if let Some(m) = self.mappings.get(&up) {
+                        return MidiNote::new(up).ok().map(|n| (n, m));
+                    }
+                }
+            }
+        }
+
+        None
     }
 
     /// Add a mapping for a note

@@ -1,14 +1,15 @@
-use crossbeam_channel::{Receiver, Sender, unbounded};
+use crossbeam_channel::{unbounded, Receiver, Sender};
 use eframe::egui;
-use egui_taffy::{TuiBuilderLogic, taffy, tui};
+use egui_taffy::{taffy, tui, TuiBuilderLogic};
 use midir::MidiInputConnection;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use taffy::prelude::length;
 use xiv_midi::{
     engine::MidiEngine,
     keyboard::{EnigoKeyboardController, Key},
-    mapping::{Action, MappingConfig, NoteMapping, create_ffxiv_default_mapping},
+    mapping::{create_ffxiv_default_mapping, Action, MappingConfig, NoteMapping},
     midi::MidiEventType,
 };
 
@@ -89,6 +90,12 @@ struct XivMidiApp {
     available_mappings: Vec<MappingOption>,
     selected_mapping_index: usize,
     mapping: MappingConfig,
+
+    // Shared mapping reference for live engine updates
+    engine_mapping: Option<Arc<Mutex<MappingConfig>>>,
+
+    // Octave transpose toggle
+    octave_transpose: bool,
 
     // Editor
     editor: MappingEditor,
@@ -440,6 +447,7 @@ impl MappingEditor {
         let mapping = MappingConfig {
             channel: Some(0),
             mappings: HashMap::new(),
+            octave_transpose: false,
         };
 
         if let Ok(exe_path) = std::env::current_exe() {
@@ -710,10 +718,26 @@ impl MappingEditor {
             .show(ctx, |ui| {
                 ui.label("Action Type:");
                 ui.horizontal(|ui| {
-                    ui.selectable_value(&mut self.action_editor.action_type, ActionType::Press, "Press");
-                    ui.selectable_value(&mut self.action_editor.action_type, ActionType::Release, "Release");
-                    ui.selectable_value(&mut self.action_editor.action_type, ActionType::SetModifiers, "SetModifiers");
-                    ui.selectable_value(&mut self.action_editor.action_type, ActionType::Delay, "Delay");
+                    ui.selectable_value(
+                        &mut self.action_editor.action_type,
+                        ActionType::Press,
+                        "Press",
+                    );
+                    ui.selectable_value(
+                        &mut self.action_editor.action_type,
+                        ActionType::Release,
+                        "Release",
+                    );
+                    ui.selectable_value(
+                        &mut self.action_editor.action_type,
+                        ActionType::SetModifiers,
+                        "SetModifiers",
+                    );
+                    ui.selectable_value(
+                        &mut self.action_editor.action_type,
+                        ActionType::Delay,
+                        "Delay",
+                    );
                 });
 
                 ui.separator();
@@ -729,8 +753,7 @@ impl MappingEditor {
                             format!("{:?}", self.action_editor.selected_key)
                         };
 
-                        let button = egui::Button::new(&key_text)
-                            .min_size(egui::vec2(200.0, 40.0));
+                        let button = egui::Button::new(&key_text).min_size(egui::vec2(200.0, 40.0));
 
                         if ui.add(button).clicked() {
                             self.action_editor.capturing_key = true;
@@ -738,7 +761,10 @@ impl MappingEditor {
 
                         // Capture key input
                         if self.action_editor.capturing_key {
-                            ui.colored_label(egui::Color32::from_rgb(255, 165, 0), "Waiting for key press...");
+                            ui.colored_label(
+                                egui::Color32::from_rgb(255, 165, 0),
+                                "Waiting for key press...",
+                            );
 
                             // Check for key events
                             if let Some(key) = self.capture_key_input(ui) {
@@ -752,10 +778,12 @@ impl MappingEditor {
                             }
                         }
 
-                        ui.label(egui::RichText::new("Tip: Click the button above and press any key")
-                            .small()
-                            .italics()
-                            .color(egui::Color32::GRAY));
+                        ui.label(
+                            egui::RichText::new("Tip: Click the button above and press any key")
+                                .small()
+                                .italics()
+                                .color(egui::Color32::GRAY),
+                        );
                     }
                     ActionType::Delay => {
                         ui.label("Delay (milliseconds):");
@@ -776,7 +804,13 @@ impl MappingEditor {
                 ui.separator();
 
                 ui.horizontal(|ui| {
-                    if ui.add_enabled(self.action_editor.is_valid() && !self.action_editor.capturing_key, egui::Button::new("OK")).clicked() {
+                    if ui
+                        .add_enabled(
+                            self.action_editor.is_valid() && !self.action_editor.capturing_key,
+                            egui::Button::new("OK"),
+                        )
+                        .clicked()
+                    {
                         should_save = true;
                         should_close = true;
                     }
@@ -788,7 +822,9 @@ impl MappingEditor {
 
         if should_save {
             if let Some(action) = self.action_editor.build_action() {
-                if let (Some(note), Some((list_type, index))) = (self.selected_note, self.editing_action_index) {
+                if let (Some(note), Some((list_type, index))) =
+                    (self.selected_note, self.editing_action_index)
+                {
                     let mapping = self.current_mapping.mappings.get_mut(&note).unwrap();
                     let actions = match list_type {
                         ActionListType::OnPress => &mut mapping.on_press,
@@ -819,15 +855,32 @@ impl MappingEditor {
         ui.input(|i| {
             // Check letter keys
             for (egui_key, our_key) in [
-                (egui::Key::A, Key::A), (egui::Key::B, Key::B), (egui::Key::C, Key::C),
-                (egui::Key::D, Key::D), (egui::Key::E, Key::E), (egui::Key::F, Key::F),
-                (egui::Key::G, Key::G), (egui::Key::H, Key::H), (egui::Key::I, Key::I),
-                (egui::Key::J, Key::J), (egui::Key::K, Key::K), (egui::Key::L, Key::L),
-                (egui::Key::M, Key::M), (egui::Key::N, Key::N), (egui::Key::O, Key::O),
-                (egui::Key::P, Key::P), (egui::Key::Q, Key::Q), (egui::Key::R, Key::R),
-                (egui::Key::S, Key::S), (egui::Key::T, Key::T), (egui::Key::U, Key::U),
-                (egui::Key::V, Key::V), (egui::Key::W, Key::W), (egui::Key::X, Key::X),
-                (egui::Key::Y, Key::Y), (egui::Key::Z, Key::Z),
+                (egui::Key::A, Key::A),
+                (egui::Key::B, Key::B),
+                (egui::Key::C, Key::C),
+                (egui::Key::D, Key::D),
+                (egui::Key::E, Key::E),
+                (egui::Key::F, Key::F),
+                (egui::Key::G, Key::G),
+                (egui::Key::H, Key::H),
+                (egui::Key::I, Key::I),
+                (egui::Key::J, Key::J),
+                (egui::Key::K, Key::K),
+                (egui::Key::L, Key::L),
+                (egui::Key::M, Key::M),
+                (egui::Key::N, Key::N),
+                (egui::Key::O, Key::O),
+                (egui::Key::P, Key::P),
+                (egui::Key::Q, Key::Q),
+                (egui::Key::R, Key::R),
+                (egui::Key::S, Key::S),
+                (egui::Key::T, Key::T),
+                (egui::Key::U, Key::U),
+                (egui::Key::V, Key::V),
+                (egui::Key::W, Key::W),
+                (egui::Key::X, Key::X),
+                (egui::Key::Y, Key::Y),
+                (egui::Key::Z, Key::Z),
             ] {
                 if i.key_pressed(egui_key) {
                     return Some(our_key);
@@ -836,11 +889,16 @@ impl MappingEditor {
 
             // Check number keys
             for (egui_key, our_key) in [
-                (egui::Key::Num0, Key::Num0), (egui::Key::Num1, Key::Num1),
-                (egui::Key::Num2, Key::Num2), (egui::Key::Num3, Key::Num3),
-                (egui::Key::Num4, Key::Num4), (egui::Key::Num5, Key::Num5),
-                (egui::Key::Num6, Key::Num6), (egui::Key::Num7, Key::Num7),
-                (egui::Key::Num8, Key::Num8), (egui::Key::Num9, Key::Num9),
+                (egui::Key::Num0, Key::Num0),
+                (egui::Key::Num1, Key::Num1),
+                (egui::Key::Num2, Key::Num2),
+                (egui::Key::Num3, Key::Num3),
+                (egui::Key::Num4, Key::Num4),
+                (egui::Key::Num5, Key::Num5),
+                (egui::Key::Num6, Key::Num6),
+                (egui::Key::Num7, Key::Num7),
+                (egui::Key::Num8, Key::Num8),
+                (egui::Key::Num9, Key::Num9),
             ] {
                 if i.key_pressed(egui_key) {
                     return Some(our_key);
@@ -849,12 +907,18 @@ impl MappingEditor {
 
             // Check function keys
             for (egui_key, our_key) in [
-                (egui::Key::F1, Key::F1), (egui::Key::F2, Key::F2),
-                (egui::Key::F3, Key::F3), (egui::Key::F4, Key::F4),
-                (egui::Key::F5, Key::F5), (egui::Key::F6, Key::F6),
-                (egui::Key::F7, Key::F7), (egui::Key::F8, Key::F8),
-                (egui::Key::F9, Key::F9), (egui::Key::F10, Key::F10),
-                (egui::Key::F11, Key::F11), (egui::Key::F12, Key::F12),
+                (egui::Key::F1, Key::F1),
+                (egui::Key::F2, Key::F2),
+                (egui::Key::F3, Key::F3),
+                (egui::Key::F4, Key::F4),
+                (egui::Key::F5, Key::F5),
+                (egui::Key::F6, Key::F6),
+                (egui::Key::F7, Key::F7),
+                (egui::Key::F8, Key::F8),
+                (egui::Key::F9, Key::F9),
+                (egui::Key::F10, Key::F10),
+                (egui::Key::F11, Key::F11),
+                (egui::Key::F12, Key::F12),
             ] {
                 if i.key_pressed(egui_key) {
                     return Some(our_key);
@@ -862,14 +926,30 @@ impl MappingEditor {
             }
 
             // Check special keys
-            if i.key_pressed(egui::Key::Space) { return Some(Key::Space); }
-            if i.key_pressed(egui::Key::Enter) { return Some(Key::Enter); }
-            if i.key_pressed(egui::Key::Tab) { return Some(Key::Tab); }
-            if i.key_pressed(egui::Key::Backspace) { return Some(Key::Backspace); }
-            if i.key_pressed(egui::Key::ArrowUp) { return Some(Key::Up); }
-            if i.key_pressed(egui::Key::ArrowDown) { return Some(Key::Down); }
-            if i.key_pressed(egui::Key::ArrowLeft) { return Some(Key::Left); }
-            if i.key_pressed(egui::Key::ArrowRight) { return Some(Key::Right); }
+            if i.key_pressed(egui::Key::Space) {
+                return Some(Key::Space);
+            }
+            if i.key_pressed(egui::Key::Enter) {
+                return Some(Key::Enter);
+            }
+            if i.key_pressed(egui::Key::Tab) {
+                return Some(Key::Tab);
+            }
+            if i.key_pressed(egui::Key::Backspace) {
+                return Some(Key::Backspace);
+            }
+            if i.key_pressed(egui::Key::ArrowUp) {
+                return Some(Key::Up);
+            }
+            if i.key_pressed(egui::Key::ArrowDown) {
+                return Some(Key::Down);
+            }
+            if i.key_pressed(egui::Key::ArrowLeft) {
+                return Some(Key::Left);
+            }
+            if i.key_pressed(egui::Key::ArrowRight) {
+                return Some(Key::Right);
+            }
 
             None
         })
@@ -1071,45 +1151,51 @@ impl MappingEditor {
 
         ui.indent(format!("action_list_{:?}", list_type), |ui| {
             for (index, action) in actions.iter().enumerate() {
-                let _response = ui.horizontal(|ui| {
-                    // Move up/down buttons for reordering
-                    if !is_readonly {
-                        if index > 0 {
-                            if ui.small_button("⬆").on_hover_text("Move up").clicked() {
-                                swap_indices = Some((index, index - 1));
-                            }
-                        } else {
-                            ui.add_enabled(false, egui::Button::new("⬆").small());
-                        }
-
-                        if index < actions.len() - 1 {
-                            if ui.small_button("⬇").on_hover_text("Move down").clicked() {
-                                swap_indices = Some((index, index + 1));
-                            }
-                        } else {
-                            ui.add_enabled(false, egui::Button::new("⬇").small());
-                        }
-                    }
-
-                    // Action display
-                    let action_text = format_action(action);
-                    ui.label(action_text);
-
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let _response = ui
+                    .horizontal(|ui| {
+                        // Move up/down buttons for reordering
                         if !is_readonly {
-                            if ui.small_button("🗑").on_hover_text("Delete").clicked() {
-                                action_to_delete = Some(index);
+                            if index > 0 {
+                                if ui.small_button("⬆").on_hover_text("Move up").clicked() {
+                                    swap_indices = Some((index, index - 1));
+                                }
+                            } else {
+                                ui.add_enabled(false, egui::Button::new("⬆").small());
                             }
-                            if ui.small_button("✏").on_hover_text("Edit").clicked() {
-                                action_to_edit = Some(index);
+
+                            if index < actions.len() - 1 {
+                                if ui.small_button("⬇").on_hover_text("Move down").clicked() {
+                                    swap_indices = Some((index, index + 1));
+                                }
+                            } else {
+                                ui.add_enabled(false, egui::Button::new("⬇").small());
                             }
                         }
-                    });
-                }).response;
+
+                        // Action display
+                        let action_text = format_action(action);
+                        ui.label(action_text);
+
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if !is_readonly {
+                                if ui.small_button("🗑").on_hover_text("Delete").clicked() {
+                                    action_to_delete = Some(index);
+                                }
+                                if ui.small_button("✏").on_hover_text("Edit").clicked() {
+                                    action_to_edit = Some(index);
+                                }
+                            }
+                        });
+                    })
+                    .response;
             }
 
             if actions.is_empty() {
-                ui.label(egui::RichText::new("(empty)").italics().color(egui::Color32::GRAY));
+                ui.label(
+                    egui::RichText::new("(empty)")
+                        .italics()
+                        .color(egui::Color32::GRAY),
+                );
             }
 
             if !is_readonly {
@@ -1163,9 +1249,15 @@ fn format_action(action: &Action) -> String {
         Action::Delay(ms) => format!("Delay: {}ms", ms),
         Action::SetModifiers { shift, ctrl, alt } => {
             let mut parts = Vec::new();
-            if *shift { parts.push("Shift"); }
-            if *ctrl { parts.push("Ctrl"); }
-            if *alt { parts.push("Alt"); }
+            if *shift {
+                parts.push("Shift");
+            }
+            if *ctrl {
+                parts.push("Ctrl");
+            }
+            if *alt {
+                parts.push("Alt");
+            }
             if parts.is_empty() {
                 "SetModifiers: None".to_string()
             } else {
@@ -1189,6 +1281,8 @@ impl XivMidiApp {
             available_mappings: Vec::new(),
             selected_mapping_index: 0,
             mapping: create_ffxiv_default_mapping(),
+            engine_mapping: None,
+            octave_transpose: false,
             editor: MappingEditor::new(),
             event_tx,
             event_rx,
@@ -1309,6 +1403,9 @@ impl XivMidiApp {
 
         self.load_selected_mapping();
 
+        // Sync octave_transpose setting into the mapping before creating the engine
+        self.mapping.octave_transpose = self.octave_transpose;
+
         let keyboard = match EnigoKeyboardController::new() {
             Ok(k) => k,
             Err(e) => {
@@ -1318,6 +1415,9 @@ impl XivMidiApp {
         };
 
         let engine = MidiEngine::new(keyboard, self.mapping.clone());
+
+        // Keep a reference to the engine's shared mapping for live updates
+        let shared_mapping = engine.mapping();
 
         let event_tx = self.event_tx.clone();
         match engine.connect_with_callback(&device_name, move |msg| {
@@ -1329,6 +1429,7 @@ impl XivMidiApp {
         }) {
             Ok(conn) => {
                 self.connection = Some(conn);
+                self.engine_mapping = Some(shared_mapping);
                 self.status = format!("Connected to '{}'", device_name);
                 self.log(format!("Successfully connected to '{}'", device_name));
                 let _ = self
@@ -1345,6 +1446,7 @@ impl XivMidiApp {
     fn disconnect_device(&mut self) {
         if self.connection.is_some() {
             self.connection = None;
+            self.engine_mapping = None;
             self.status = "Disconnected".to_string();
             self.log("Disconnected from device".to_string());
             let _ = self.event_tx.send(AppEvent::DeviceDisconnected);
@@ -1509,6 +1611,27 @@ impl XivMidiApp {
                 egui::Color32::GRAY
             };
             ui.colored_label(status_color, &self.status);
+
+            ui.separator();
+
+            let prev_octave_transpose = self.octave_transpose;
+            ui.checkbox(&mut self.octave_transpose, "八度等效")
+                .on_hover_text("将音域外的音符按八度移调到音域内");
+
+            // Live-update the engine mapping when toggled
+            if self.octave_transpose != prev_octave_transpose {
+                if let Some(ref engine_mapping) = self.engine_mapping {
+                    if let Ok(mut m) = engine_mapping.lock() {
+                        m.octave_transpose = self.octave_transpose;
+                    }
+                }
+                let state = if self.octave_transpose {
+                    "开启"
+                } else {
+                    "关闭"
+                };
+                self.log(format!("八度等效: {}", state));
+            }
         });
 
         ui.separator();
@@ -1563,18 +1686,26 @@ impl XivMidiApp {
                             );
                         } else {
                             for note_val in sorted_notes {
-                                if let Some(mapping) = self.mapping.mappings.get(note_val) {
-                                    let note_name = xiv_midi::midi::MidiNote::new(*note_val)
-                                        .map(|n| n.full_name())
-                                        .unwrap_or_else(|_| note_val.to_string());
+                                let midi_note = match xiv_midi::midi::MidiNote::new(*note_val) {
+                                    Ok(n) => n,
+                                    Err(_) => continue,
+                                };
+                                let note_name = midi_note.full_name();
+
+                                // Use octave-transposed lookup to match engine behavior
+                                let lookup_result = self.mapping.get_mapping_transposed(midi_note);
+
+                                if let Some((transposed_note, mapping)) = lookup_result {
+                                    let label = if transposed_note.value() != *note_val {
+                                        format!("{} -> {}:", note_name, transposed_note.full_name())
+                                    } else {
+                                        format!("{}:", note_name)
+                                    };
 
                                     tui.add_with_border(|tui| {
                                         tui.ui(|ui| {
                                             ui.horizontal(|ui| {
-                                                ui.label(
-                                                    egui::RichText::new(format!("{}:", note_name))
-                                                        .strong(),
-                                                );
+                                                ui.label(egui::RichText::new(&label).strong());
                                                 for action in &mapping.on_press {
                                                     ui.label(format!("{:?}", action));
                                                 }
@@ -1689,6 +1820,37 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "XIV MIDI",
         options,
-        Box::new(|cc| Ok(Box::new(XivMidiApp::new(cc)))),
+        Box::new(|cc| {
+            setup_fonts(&cc.egui_ctx);
+            Ok(Box::new(XivMidiApp::new(cc)))
+        }),
     )
+}
+
+pub fn setup_fonts(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+
+    fonts.font_data.insert(
+        "Harmony OS Sans".to_string(),
+        Arc::new(egui::FontData::from_static(include_bytes!(
+            "../../assets/HarmonyOS_Sans_SC_Regular.ttf"
+        ))),
+    );
+
+    fonts
+        .families
+        .get_mut(&egui::FontFamily::Proportional)
+        .unwrap()
+        .push("Harmony OS Sans".to_owned());
+    fonts
+        .families
+        .get_mut(&egui::FontFamily::Monospace)
+        .unwrap()
+        .push("Harmony OS Sans".to_owned());
+
+    // Phosphor Icons (Regular + Fill)
+    egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
+    egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Fill);
+
+    ctx.set_fonts(fonts);
 }
